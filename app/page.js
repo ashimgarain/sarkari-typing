@@ -7,11 +7,10 @@ import { SITE_CONFIG } from "../config/site";
 import { PASSAGES } from "../data/passages";
 import { Award, Lock, Moon, Sun, Play, RotateCcw } from "lucide-react";
 
-// Initialize Supabase (Ensure your .env.local has these keys)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
-);
+// FIXED: We now provide a safe placeholder URL so Vercel's static build doesn't crash!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder_key";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function SupremeTypingPortal() {
   const [theme, setTheme] = useState("dark");
@@ -54,6 +53,7 @@ export default function SupremeTypingPortal() {
       finishTest();
     }
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, timeLeft]);
 
   // 3. Test Controls
