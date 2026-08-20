@@ -1,13 +1,13 @@
 "use client";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import Script from "next/script";
 import confetti from "canvas-confetti";
 import { createClient } from "@supabase/supabase-js";
-import { Award, Lock, Moon, Sun, Play, RotateCcw, Activity, ChevronDown, User, Key, LogOut, Trophy, CheckCircle2, ShieldCheck, Mail, Eye, EyeOff } from "lucide-react";
+import { Award, Lock, Moon, Sun, Play, RotateCcw, Activity, ChevronDown, User, LogOut, Trophy, Eye, EyeOff } from "lucide-react";
 
 // --- 1. CONFIGURATION ---
 const SITE_CONFIG = {
-  pricing: { amountINR: 50, freeTrialsAllowed: 1 },
+  pricing: { amountINR: 50 },
   features: { xpMultiplier: 10 },
   examModes: [
     { id: "practice", name: "1-Min Quick Practice", duration: 60 },
@@ -42,7 +42,6 @@ export default function SupremeTypingPortal() {
   const [theme, setTheme] = useState("dark");
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState({ is_premium: false, total_xp: 0 });
-  const [localTestCount, setLocalTestCount] = useState(0);
 
   // Active States
   const [selectedExam, setSelectedExam] = useState(SITE_CONFIG.examModes[0]);
@@ -80,11 +79,10 @@ export default function SupremeTypingPortal() {
 
   // --- INITIALIZATION ---
   useEffect(() => {
-    const savedCount = parseInt(localStorage.getItem("sarkari_test_count") || "0");
-    setLocalTestCount(savedCount);
-    
-    // Check local storage for theme
-    if (localStorage.getItem("theme") === "light") setTheme("light");
+    // Explicitly check for light mode override
+    if (localStorage.getItem("theme") === "light") {
+      setTheme("light");
+    }
 
     const loadSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -135,7 +133,8 @@ export default function SupremeTypingPortal() {
       if (authMode === "signup") {
         const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
         if (error) throw error;
-        setAuthError("Success! Check your email to confirm your account.");
+        setAuthError("Account created! You are now logged in.");
+        setTimeout(() => setShowAuthModal(false), 1500);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
         if (error) throw error;
@@ -166,6 +165,7 @@ export default function SupremeTypingPortal() {
 
   const attemptPassageSelection = (idx) => {
     if (isActive) return;
+    // FIX 2: Explicitly lock passages 2-10 if not premium. Passage 1 (idx 0) is always allowed.
     if (idx > 0 && !profile.is_premium) {
       setShowPaywall(true);
       return;
@@ -177,7 +177,9 @@ export default function SupremeTypingPortal() {
   };
 
   const startTest = () => {
-    if (!profile.is_premium && localTestCount >= SITE_CONFIG.pricing.freeTrialsAllowed) {
+    // FIX 2: Ensure the Start button only checks if the current passage is locked. 
+    // Passage 1 is permanently free for all exam modes.
+    if (!profile.is_premium && passageIndex > 0) {
       setShowPaywall(true);
       return;
     }
@@ -190,7 +192,6 @@ export default function SupremeTypingPortal() {
 
   const handleInput = (e) => {
     if (!isActive && !isFinished) setIsActive(true);
-    // Anti-cheat: prevent typing beyond passage length
     if (e.target.value.length <= currentPassage.length) {
       setInput(e.target.value);
     }
@@ -219,36 +220,29 @@ export default function SupremeTypingPortal() {
     const stats = calculateLiveStats();
     if (stats.acc > 90) confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
 
-    if (!profile.is_premium) {
-      const newCount = localTestCount + 1;
-      setLocalTestCount(newCount);
-      localStorage.setItem("sarkari_test_count", newCount.toString());
-    }
-
     if (user) {
-      // NOTE: We send stats to DB, but the database Trigger will calculate the TRUE XP securely.
       await supabase.from("test_results").insert({ 
         user_id: user.id, 
         net_wpm: stats.nwpm, 
         accuracy: stats.acc, 
-        xp_earned: 0 // Will be overridden by DB Trigger
+        xp_earned: 0 
       });
-      setTimeout(() => refreshProfile(user.id), 1000); // Wait for trigger to update profile
+      setTimeout(() => refreshProfile(user.id), 1000); 
     } else {
-      setTimeout(() => alert(`Time's Up!\nNet WPM: ${stats.nwpm}\nAccuracy: ${stats.acc}%\n\nLog in or create an account to save your scores!`), 500);
+      setTimeout(() => alert(`Time's Up!\nNet WPM: ${stats.nwpm}\nAccuracy:${stats.acc}%\n\nLog in or create an account to save your scores!`), 500);
     }
   };
 
   // --- CHARACTER-LEVEL HIGHLIGHTING ---
   const renderPassage = () => {
     return currentPassage.split('').map((char, index) => {
-      let className = "text-slate-400 dark:text-slate-500 transition-colors"; // Default untyped
+      let className = "text-slate-400 dark:text-slate-500 transition-colors"; 
       if (index < input.length) {
         className = input[index] === char 
           ? "text-emerald-600 dark:text-emerald-400 font-bold" 
           : "text-red-500 bg-red-100 dark:bg-red-500/20 underline decoration-red-500";
       } else if (index === input.length && isActive) {
-        className = "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-500/20 underline decoration-2 underline-offset-4"; // Cursor
+        className = "text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-500/20 underline decoration-2 underline-offset-4"; 
       }
       return (
         <span key={index} ref={index === input.length ? activeWordRef : null} className={className}>
@@ -258,7 +252,7 @@ export default function SupremeTypingPortal() {
     });
   };
 
-  // --- SERVER-SECURE RAZORPAY PAYMENT ---
+  // --- RAZORPAY PAYMENT ---
   const handlePayment = async () => {
     if (!user) {
       setShowPaywall(false);
@@ -321,221 +315,223 @@ export default function SupremeTypingPortal() {
   };
 
   const liveStats = calculateLiveStats();
-  const dark = theme === "dark";
 
+  // FIX 1: The 'dark' class wrapper ensures Light Mode fully strips the dark styles regardless of Windows settings.
   return (
-    <div className={dark ? "dark bg-[#0B1120] text-slate-100 min-h-screen font-sans" : "bg-slate-50 text-slate-900 min-h-screen font-sans"}>
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
-      
-      {/* HEADER */}
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#0B1120]/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex justify-between items-center">
-        <h1 className="text-3xl font-black tracking-tight text-blue-600 dark:text-blue-500">Sarkari<span className="text-slate-800 dark:text-white">Type</span> <span className="text-amber-500 text-lg">Pro</span></h1>
+    <div className={theme === "dark" ? "dark" : ""}>
+      <div className="bg-slate-50 dark:bg-[#0B1120] text-slate-900 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200">
+        <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
         
-        <div className="flex gap-4 items-center">
-          <button onClick={fetchLeaderboard} className="flex items-center gap-2 text-sm font-bold bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition">
-            <Trophy className="w-4 h-4 text-amber-500" /> Leaderboard
-          </button>
+        {/* HEADER */}
+        <header className="sticky top-0 z-40 bg-white/80 dark:bg-[#0B1120]/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex justify-between items-center">
+          <h1 className="text-3xl font-black tracking-tight text-blue-600 dark:text-blue-500">Sarkari<span className="text-slate-800 dark:text-white">Type</span> <span className="text-amber-500 text-lg">Pro</span></h1>
           
-          <button onClick={toggleTheme} className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition border border-slate-200 dark:border-slate-700 shadow-sm">
-            {dark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-blue-600" />}
-          </button>
-          
-          {user ? (
-            <div className="flex items-center gap-3">
-              <span className="font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1 bg-amber-100 dark:bg-amber-500/10 px-4 py-2 rounded-full border border-amber-300 dark:border-amber-500/20 shadow-sm">
-                <Award className="w-5 h-5"/> {profile.total_xp} XP
-              </span>
-              {!profile.is_premium && (
-                <button onClick={() => setShowPaywall(true)} className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold px-5 py-2 rounded-full text-sm shadow-md hover:scale-105 transition transform border border-amber-600">
-                  Unlock Pro
-                </button>
-              )}
-              <button onClick={() => supabase.auth.signOut()} className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:text-red-500 transition">
-                <LogOut className="w-5 h-5" />
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => { setAuthMode("login"); setShowAuthModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold shadow-md transition">
-              Sign In
+          <div className="flex gap-4 items-center">
+            <button onClick={fetchLeaderboard} className="flex items-center gap-2 text-sm font-bold bg-slate-100 dark:bg-slate-800 px-4 py-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+              <Trophy className="w-4 h-4 text-amber-500" /> Leaderboard
             </button>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto p-6 mt-4">
-        {/* EXAM MODE MENU */}
-        <div className="flex justify-between items-center mb-8 bg-white dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm">
-            <div className="flex items-center gap-3">
-                <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                <h2 className="text-lg font-bold">Select Exam Mode:</h2>
-            </div>
-            <div className="relative">
-                <select value={selectedExam.id} onChange={handleExamChange} disabled={isActive} className="appearance-none bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold py-3 pl-5 pr-12 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-inner disabled:opacity-50">
-                    {SITE_CONFIG.examModes.map(mode => (
-                        <option key={mode.id} value={mode.id}>{mode.name} ({Math.floor(mode.duration / 60)} Mins)</option>
-                    ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none" />
-            </div>
-        </div>
-
-        {/* LIVE METRICS */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-            <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
-                <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Time Left</span>
-                <span className={`text-4xl font-black font-mono ${timeLeft < 60 && isActive ? 'text-red-500 animate-pulse' : 'text-blue-600 dark:text-blue-400'}`}>
-                    {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+            
+            <button onClick={toggleTheme} className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition border border-slate-200 dark:border-slate-700 shadow-sm">
+              {theme === "dark" ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-blue-600" />}
+            </button>
+            
+            {user ? (
+              <div className="flex items-center gap-3">
+                <span className="font-bold text-amber-600 dark:text-amber-500 flex items-center gap-1 bg-amber-100 dark:bg-amber-500/10 px-4 py-2 rounded-full border border-amber-300 dark:border-amber-500/20 shadow-sm">
+                  <Award className="w-5 h-5"/> {profile.total_xp} XP
                 </span>
-            </div>
-            <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
-                <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Net WPM</span>
-                <span className="text-4xl font-black font-mono">{liveStats.nwpm}</span>
-            </div>
-            <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
-                <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Accuracy</span>
-                <span className={`text-4xl font-black font-mono ${liveStats.acc < 90 ? 'text-red-600 dark:text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{liveStats.acc}%</span>
-            </div>
-            <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-300 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
-                <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Gross WPM</span>
-                <span className="text-4xl font-black font-mono">{liveStats.gwpm}</span>
-            </div>
-        </div>
-
-        {/* PASSAGE PILLS */}
-        <div className="flex gap-3 mb-6 overflow-x-auto pb-4 custom-scrollbar">
-          {PASSAGES.map((p, idx) => {
-            const isLocked = idx > 0 && !profile.is_premium;
-            return (
-                <button 
-                key={p.id} onClick={() => attemptPassageSelection(idx)}
-                className={`px-6 py-3 rounded-xl text-sm font-black whitespace-nowrap transition-all flex items-center gap-2 ${
-                    passageIndex === idx 
-                    ? "bg-blue-600 text-white scale-105 shadow-md border-blue-700" 
-                    : isLocked ? "bg-slate-100 dark:bg-slate-900/50 text-slate-400 border border-slate-200 dark:border-slate-800"
-                    : "bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700"
-                }`}
-                >
-                Passage {p.id} {isLocked ? <Lock className="w-4 h-4"/> : ""}
+                {!profile.is_premium && (
+                  <button onClick={() => setShowPaywall(true)} className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold px-5 py-2 rounded-full text-sm shadow-md hover:scale-105 transition transform border border-amber-600">
+                    Unlock Pro
+                  </button>
+                )}
+                <button onClick={() => supabase.auth.signOut()} className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:text-red-500 transition border border-slate-200 dark:border-slate-700 shadow-sm">
+                  <LogOut className="w-5 h-5" />
                 </button>
-            );
-          })}
-        </div>
-
-        {/* TYPING CONSOLE */}
-        <div className="bg-white dark:bg-slate-800/80 p-8 rounded-[2rem] shadow-2xl border border-slate-300 dark:border-slate-700 relative">
-          <div className="flex justify-between items-center mb-6 border-b border-slate-200 dark:border-slate-700 pb-6">
-            <div className="flex flex-col">
-                <span className="text-xl font-black">{selectedExam.name} Evaluation</span>
-                <span className="text-sm font-bold text-slate-500">Official Format • Anti-Cheat Length Lock</span>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => { setInput(""); setTimeLeft(selectedExam.duration); setIsActive(false); setIsFinished(false); }} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-xl transition hover:shadow">
-                <RotateCcw className="w-5 h-5" />
-              </button>
-              <button onClick={startTest} disabled={isActive} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black rounded-xl flex items-center gap-2 shadow-lg hover:-translate-y-0.5 transition disabled:opacity-50">
-                <Play className="w-5 h-5 fill-current" /> {localTestCount === 0 && !profile.is_premium ? "Start Free Trial" : isFinished ? "Retake Test" : "Start Mock Test"}
-              </button>
-            </div>
-          </div>
-          
-          {/* Reference Text */}
-          <div className="mb-8 p-6 bg-slate-50/50 dark:bg-[#070b14] rounded-2xl border-2 border-slate-200 dark:border-slate-800 h-64 overflow-y-auto font-mono text-xl leading-[2.5] tracking-wide relative scroll-smooth shadow-inner">
-            {renderPassage()}
-          </div>
-          
-          {/* Input Area */}
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={handleInput}
-            disabled={isFinished || (!isActive && input.length === 0)}
-            maxLength={currentPassage.length}
-            className="w-full h-48 p-6 font-mono text-xl leading-relaxed rounded-2xl bg-white dark:bg-[#0B1120] border-2 border-slate-300 dark:border-slate-700 focus:border-blue-500 outline-none resize-none shadow-inner"
-            placeholder={isActive ? "Type exactly as written above..." : "Click 'Start Mock Test' to unlock keyboard..."}
-          />
-        </div>
-      </main>
-
-      {/* --- AUTH MODAL --- */}
-      {showAuthModal && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-8 rounded-3xl max-w-md w-full shadow-2xl relative">
-            <button onClick={() => setShowAuthModal(false)} className="absolute right-4 top-4 text-slate-500 hover:text-slate-800 dark:hover:text-white">✕</button>
-            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl mb-6">
-              <button onClick={() => { setAuthMode("login"); setAuthError(""); }} className={`flex-1 py-2.5 rounded-lg font-bold text-sm ${authMode === "login" ? "bg-blue-600 text-white" : "text-slate-500"}`}>Log In</button>
-              <button onClick={() => { setAuthMode("signup"); setAuthError(""); }} className={`flex-1 py-2.5 rounded-lg font-bold text-sm ${authMode === "signup" ? "bg-blue-600 text-white" : "text-slate-500"}`}>Create Account</button>
-            </div>
-
-            <form onSubmit={handleAuthSubmit} className="flex flex-col gap-4 mb-4">
-              <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="Email Address" className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"/>
-              <div className="relative">
-                <input type={showPassword ? "text" : "password"} required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Password (min. 6 char)" className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900 rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500"/>
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-slate-500">{showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
               </div>
-              {authError && <div className="text-red-500 text-sm font-bold bg-red-100 dark:bg-red-900/30 p-3 rounded-lg">{authError}</div>}
-              <button type="submit" disabled={authLoading} className="w-full py-4 rounded-xl bg-blue-600 text-white font-black text-lg disabled:opacity-50">{authLoading ? "Processing..." : authMode === "login" ? "Sign In" : "Register"}</button>
-            </form>
-
-            <div className="flex items-center gap-3 my-4">
-              <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-              <span className="text-xs font-bold text-slate-500">OR</span>
-              <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-            </div>
-
-            <button onClick={handleGoogleLogin} className="w-full py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold flex justify-center items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700">
-              <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.35 12.27c0-.79-.07-1.55-.22-2.27H12v4.3h5.22a4.46 4.46 0 0 1-1.94 2.93v2.44h3.14c1.84-1.69 2.93-4.18 2.93-7.4z"/><path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.36l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.52A9.74 9.74 0 0 0 12 21.5z"/><path fill="#FBBC05" d="M6.54 13.59A5.86 5.86 0 0 1 6.23 12c0-.55.1-1.09.31-1.59V7.89H3.3A9.49 9.49 0 0 0 2.25 12c0 1.53.36 2.98 1.05 4.11l3.24-2.52z"/><path fill="#EA4335" d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.42 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.39l3.24 2.52c.77-2.31 2.92-4.03 5.46-4.03z"/></svg>
-              Continue with Google
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* --- LEADERBOARD MODAL --- */}
-      {showLeaderboard && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-8 rounded-3xl max-w-md w-full shadow-2xl relative">
-            <button onClick={() => setShowLeaderboard(false)} className="absolute right-4 top-4 text-slate-500 hover:text-slate-800 dark:hover:text-white">✕</button>
-            <div className="flex items-center gap-2 mb-6">
-                <Trophy className="w-8 h-8 text-amber-500" />
-                <h3 className="text-2xl font-black">Global Top 10</h3>
-            </div>
-            {leaderboard.length === 0 ? <p className="text-slate-500 font-bold text-center py-4">Loading scores...</p> : 
-            <div className="space-y-3">
-                {leaderboard.map((player, index) => (
-                    <div key={index} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <div className="flex items-center gap-3">
-                            <span className="font-black text-slate-400 w-4">{index + 1}</span>
-                            <span className="font-bold">{player.full_name || "Aspirant"} {player.is_premium && <Lock className="w-3 h-3 inline text-amber-500"/>}</span>
-                        </div>
-                        <span className="font-black text-amber-500">{player.total_xp} XP</span>
-                    </div>
-                ))}
-            </div>}
-          </div>
-        </div>
-      )}
-
-      {/* --- PAYWALL MODAL --- */}
-      {showPaywall && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-10 rounded-3xl max-w-md w-full text-center shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 to-orange-500"></div>
-            <Lock className="w-14 h-14 text-amber-500 mx-auto mb-6" />
-            <h3 className="text-3xl font-black mb-3">Premium Locked</h3>
-            <p className="text-slate-500 dark:text-slate-400 mb-8 font-medium">Unlock all 10 long-form official exam passages and secure your spot on the global leaderboard.</p>
-            <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-6 mb-8 border border-slate-200 dark:border-slate-700">
-                <div className="text-5xl font-black text-blue-600 mb-2">₹{SITE_CONFIG.pricing.amountINR}</div>
-                <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">One-Time Lifetime Access</div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <button onClick={handlePayment} disabled={paymentLoading} className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black text-lg shadow-lg hover:-translate-y-0.5 transition disabled:opacity-50">
-                {paymentLoading ? "Connecting Securely..." : user ? "Pay via UPI / Card" : "Log In to Upgrade"}
+            ) : (
+              <button onClick={() => { setAuthMode("login"); setShowAuthModal(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold shadow-md transition">
+                Sign In
               </button>
-              <button onClick={() => setShowPaywall(false)} className="w-full py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Cancel</button>
+            )}
+          </div>
+        </header>
+
+        <main className="max-w-6xl mx-auto p-6 mt-4">
+          {/* EXAM MODE MENU */}
+          <div className="flex justify-between items-center mb-8 bg-white dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center gap-3">
+                  <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  <h2 className="text-lg font-bold">Select Exam Mode:</h2>
+              </div>
+              <div className="relative">
+                  <select value={selectedExam.id} onChange={handleExamChange} disabled={isActive} className="appearance-none bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 font-bold py-3 pl-5 pr-12 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-inner disabled:opacity-50 text-slate-800 dark:text-slate-100">
+                      {SITE_CONFIG.examModes.map(mode => (
+                          <option key={mode.id} value={mode.id}>{mode.name} ({Math.floor(mode.duration / 60)} Mins)</option>
+                      ))}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 pointer-events-none" />
+              </div>
+          </div>
+
+          {/* LIVE METRICS */}
+          <div className="grid grid-cols-4 gap-4 mb-8">
+              <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
+                  <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Time Left</span>
+                  <span className={`text-4xl font-black font-mono ${timeLeft < 60 && isActive ? 'text-red-500 animate-pulse' : 'text-blue-600 dark:text-blue-400'}`}>
+                      {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+                  </span>
+              </div>
+              <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
+                  <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Net WPM</span>
+                  <span className="text-4xl font-black font-mono">{liveStats.nwpm}</span>
+              </div>
+              <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
+                  <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Accuracy</span>
+                  <span className={`text-4xl font-black font-mono ${liveStats.acc < 90 ? 'text-red-600 dark:text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>{liveStats.acc}%</span>
+              </div>
+              <div className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col items-center justify-center transform hover:scale-105 transition">
+                  <span className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1">Gross WPM</span>
+                  <span className="text-4xl font-black font-mono">{liveStats.gwpm}</span>
+              </div>
+          </div>
+
+          {/* PASSAGE PILLS */}
+          <div className="flex gap-3 mb-6 overflow-x-auto pb-4 custom-scrollbar">
+            {PASSAGES.map((p, idx) => {
+              const isLocked = idx > 0 && !profile.is_premium;
+              return (
+                  <button 
+                  key={p.id} onClick={() => attemptPassageSelection(idx)}
+                  className={`px-6 py-3 rounded-xl text-sm font-black whitespace-nowrap transition-all flex items-center gap-2 ${
+                      passageIndex === idx 
+                      ? "bg-blue-600 text-white scale-105 shadow-md border-blue-700" 
+                      : isLocked ? "bg-slate-200 dark:bg-slate-900/50 text-slate-400 border border-slate-300 dark:border-slate-800"
+                      : "bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-slate-700"
+                  }`}
+                  >
+                  Passage {p.id} {isLocked ? <Lock className="w-4 h-4"/> : ""}
+                  </button>
+              );
+            })}
+          </div>
+
+          {/* TYPING CONSOLE */}
+          <div className="bg-white dark:bg-slate-800/80 p-8 rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-700 relative">
+            <div className="flex justify-between items-center mb-6 border-b border-slate-200 dark:border-slate-700 pb-6">
+              <div className="flex flex-col">
+                  <span className="text-xl font-black">{selectedExam.name} Evaluation</span>
+                  <span className="text-sm font-bold text-slate-500">Official Format • Anti-Cheat Length Lock</span>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { setInput(""); setTimeLeft(selectedExam.duration); setIsActive(false); setIsFinished(false); }} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-xl transition hover:shadow border border-slate-200 dark:border-slate-600">
+                  <RotateCcw className="w-5 h-5" />
+                </button>
+                <button onClick={startTest} disabled={isActive} className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black rounded-xl flex items-center gap-2 shadow-lg hover:-translate-y-0.5 transition disabled:opacity-50">
+                  <Play className="w-5 h-5 fill-current" /> {passageIndex === 0 && !profile.is_premium ? "Start Free Test" : isFinished ? "Retake Test" : "Start Mock Test"}
+                </button>
+              </div>
+            </div>
+            
+            {/* Reference Text */}
+            <div className="mb-8 p-6 bg-slate-50 dark:bg-[#070b14] rounded-2xl border border-slate-200 dark:border-slate-800 h-64 overflow-y-auto font-mono text-xl leading-[2.5] tracking-wide relative scroll-smooth shadow-inner">
+              {renderPassage()}
+            </div>
+            
+            {/* Input Area */}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={handleInput}
+              disabled={isFinished || (!isActive && input.length === 0)}
+              maxLength={currentPassage.length}
+              className="w-full h-48 p-6 font-mono text-xl leading-relaxed rounded-2xl bg-slate-50 dark:bg-[#0B1120] border border-slate-300 dark:border-slate-700 focus:border-blue-500 outline-none resize-none shadow-inner"
+              placeholder={isActive ? "Type exactly as written above..." : "Click 'Start Test' to unlock keyboard..."}
+            />
+          </div>
+        </main>
+
+        {/* --- AUTH MODAL --- */}
+        {showAuthModal && (
+          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-8 rounded-3xl max-w-md w-full shadow-2xl relative">
+              <button onClick={() => setShowAuthModal(false)} className="absolute right-4 top-4 text-slate-500 hover:text-slate-800 dark:hover:text-white">✕</button>
+              <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl mb-6">
+                <button onClick={() => { setAuthMode("login"); setAuthError(""); }} className={`flex-1 py-2.5 rounded-lg font-bold text-sm ${authMode === "login" ? "bg-blue-600 text-white" : "text-slate-500"}`}>Log In</button>
+                <button onClick={() => { setAuthMode("signup"); setAuthError(""); }} className={`flex-1 py-2.5 rounded-lg font-bold text-sm ${authMode === "signup" ? "bg-blue-600 text-white" : "text-slate-500"}`}>Create Account</button>
+              </div>
+
+              <form onSubmit={handleAuthSubmit} className="flex flex-col gap-4 mb-4">
+                <input type="email" required value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="Email Address" className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900 rounded-xl font-bold outline-none border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500"/>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} required value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Password (min. 6 char)" className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900 rounded-xl font-bold outline-none border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500"/>
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3.5 text-slate-500">{showPassword ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
+                </div>
+                {authError && <div className={`text-sm font-bold p-3 rounded-lg ${authError.includes("Success") || authError.includes("created") ? "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30" : "text-red-500 bg-red-100 dark:bg-red-900/30"}`}>{authError}</div>}
+                <button type="submit" disabled={authLoading} className="w-full py-4 rounded-xl bg-blue-600 text-white font-black text-lg disabled:opacity-50">{authLoading ? "Processing..." : authMode === "login" ? "Sign In" : "Register"}</button>
+              </form>
+
+              <div className="flex items-center gap-3 my-4">
+                <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+                <span className="text-xs font-bold text-slate-500">OR</span>
+                <div className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+              </div>
+
+              <button onClick={handleGoogleLogin} className="w-full py-3.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold flex justify-center items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700">
+                <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M21.35 12.27c0-.79-.07-1.55-.22-2.27H12v4.3h5.22a4.46 4.46 0 0 1-1.94 2.93v2.44h3.14c1.84-1.69 2.93-4.18 2.93-7.4z"/><path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.36l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.52A9.74 9.74 0 0 0 12 21.5z"/><path fill="#FBBC05" d="M6.54 13.59A5.86 5.86 0 0 1 6.23 12c0-.55.1-1.09.31-1.59V7.89H3.3A9.49 9.49 0 0 0 2.25 12c0 1.53.36 2.98 1.05 4.11l3.24-2.52z"/><path fill="#EA4335" d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.83 3.42 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.7 5.39l3.24 2.52c.77-2.31 2.92-4.03 5.46-4.03z"/></svg>
+                Continue with Google
+              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* --- LEADERBOARD MODAL --- */}
+        {showLeaderboard && (
+          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-8 rounded-3xl max-w-md w-full shadow-2xl relative">
+              <button onClick={() => setShowLeaderboard(false)} className="absolute right-4 top-4 text-slate-500 hover:text-slate-800 dark:hover:text-white">✕</button>
+              <div className="flex items-center gap-2 mb-6">
+                  <Trophy className="w-8 h-8 text-amber-500" />
+                  <h3 className="text-2xl font-black">Global Top 10</h3>
+              </div>
+              {leaderboard.length === 0 ? <p className="text-slate-500 font-bold text-center py-4">Loading scores...</p> : 
+              <div className="space-y-3">
+                  {leaderboard.map((player, index) => (
+                      <div key={index} className="flex justify-between items-center p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                          <div className="flex items-center gap-3">
+                              <span className="font-black text-slate-400 w-4">{index + 1}</span>
+                              <span className="font-bold">{player.full_name || "Aspirant"} {player.is_premium && <Lock className="w-3 h-3 inline text-amber-500"/>}</span>
+                          </div>
+                          <span className="font-black text-amber-500">{player.total_xp} XP</span>
+                      </div>
+                  ))}
+              </div>}
+            </div>
+          </div>
+        )}
+
+        {/* --- PAYWALL MODAL --- */}
+        {showPaywall && (
+          <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-10 rounded-3xl max-w-md w-full text-center shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 to-orange-500"></div>
+              <Lock className="w-14 h-14 text-amber-500 mx-auto mb-6" />
+              <h3 className="text-3xl font-black mb-3">Premium Locked</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-8 font-medium">Unlock Passages 2-10 and secure your spot on the global leaderboard with full access.</p>
+              <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-6 mb-8 border border-slate-200 dark:border-slate-700">
+                  <div className="text-5xl font-black text-blue-600 mb-2">₹{SITE_CONFIG.pricing.amountINR}</div>
+                  <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">One-Time Lifetime Access</div>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button onClick={handlePayment} disabled={paymentLoading} className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black text-lg shadow-lg hover:-translate-y-0.5 transition disabled:opacity-50">
+                  {paymentLoading ? "Connecting Securely..." : user ? "Pay via UPI / Card" : "Log In to Upgrade"}
+                </button>
+                <button onClick={() => setShowPaywall(false)} className="w-full py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
