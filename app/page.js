@@ -352,6 +352,8 @@ export default function SupremeTypingPortal() {
   const activeCharRef = useRef(null);
 
   const countdownTimerRef = useRef(null);
+  const finishTestRef = useRef(null);
+  const finishingRef = useRef(false);
 
   /* -------------------------------------------------------
      CURRENT PASSAGE
@@ -365,15 +367,28 @@ export default function SupremeTypingPortal() {
 ======================================================== */
 
 const refreshProfile = useCallback(async (userId) => {
+  if (!userId) {
+    return null;
+  }
+
   const { data, error } = await supabase
     .from("profiles")
-    .select("*")
+    .select("id, email, full_name, is_premium, total_xp")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
-  if (!error && data) {
-    setProfile(data);
+  if (error) {
+    console.error("PROFILE LOAD ERROR:", error);
+    return null;
   }
+
+  if (data) {
+    setProfile(data);
+  } else {
+    console.warn("No profile row found for user:", userId);
+  }
+
+  return data;
 }, []);
   /* ========================================================
      INITIALIZATION
@@ -524,7 +539,7 @@ useEffect(() => {
   const handleExamChange = (
     event
   ) => {
-    if (isActive) return;
+    if (isActive || countdown > 0) return;
 
     const mode =
       SITE_CONFIG.examModes.find(
@@ -560,7 +575,7 @@ useEffect(() => {
 
   const attemptPassageSelection =
     (index) => {
-      if (isActive) return;
+      if (isActive || countdown > 0) return;
 
       if (
         isPassageLocked(index)
@@ -606,6 +621,8 @@ useEffect(() => {
       setIsFinished(false);
 
       setLastResult(null);
+
+      finishingRef.current = false;
 
       setIsActive(true);
 
@@ -700,6 +717,8 @@ useEffect(() => {
 
     setCountdown(0);
 
+    finishingRef.current = false;
+
     setInput("");
 
     setTimeLeft(
@@ -722,20 +741,25 @@ useEffect(() => {
   ======================================================== */
 
 const finishTest = useCallback(
-  async () => {
-    if (!isActive) {
+  async ({
+    finalInput = input,
+    finalTimeLeft = timeLeft,
+  } = {}) => {
+    if (!isActive || finishingRef.current) {
       return;
     }
+
+    finishingRef.current = true;
 
     setIsActive(false);
     setIsFinished(true);
 
     const elapsedSeconds =
-      selectedExam.duration - timeLeft;
+      selectedExam.duration - finalTimeLeft;
 
     const stats = calculateStats(
       currentPassage.text,
-      input,
+      finalInput,
       Math.max(elapsedSeconds, 1)
     );
 
@@ -777,16 +801,33 @@ const finishTest = useCallback(
       We are NOT changing your payment system here.
     */
     if (user) {
-      await supabase.from("test_results").insert({
-        user_id: user.id,
-        net_wpm: stats.netWpm,
-        accuracy: stats.accuracy,
-        xp_earned: 0,
-      });
+      const xpEarned = Math.max(
+        0,
+        Math.round(
+          stats.netWpm *
+            (stats.accuracy / 100) *
+            SITE_CONFIG.features.xpMultiplier
+        )
+      );
 
-      setTimeout(() => {
-        refreshProfile(user.id);
-      }, 800);
+      const { error: resultInsertError } =
+        await supabase.from("test_results").insert({
+          user_id: user.id,
+          net_wpm: stats.netWpm,
+          accuracy: stats.accuracy,
+          xp_earned: xpEarned,
+        });
+
+      if (resultInsertError) {
+        console.error(
+          "TEST RESULT INSERT ERROR:",
+          resultInsertError
+        );
+      } else {
+        setTimeout(() => {
+          refreshProfile(user.id);
+        }, 800);
+      }
     }
 
     /*
@@ -814,6 +855,113 @@ const finishTest = useCallback(
 );
 
   /* ========================================================
+     ACTIVE TEST TIMER
+  ======================================================== */
+
+  useEffect(() => {
+    finishTestRef.current = finishTest;
+  }, [finishTest]);
+
+  useEffect(() => {
+    if (!isActive) {
+      return undefined;
+    }
+
+    const timerId = window.setInterval(() => {
+      setTimeLeft((current) => {
+        if (current <= 1) {
+          window.clearInterval(timerId);
+
+          window.setTimeout(() => {
+            finishTestRef.current?.({
+              finalInput:
+                inputRef.current?.value || "",
+              finalTimeLeft: 0,
+            });
+          }, 0);
+
+          return 0;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [isActive]);
+
+  /* ========================================================
+     STRICT EXAM PROTECTION
+  ======================================================== */
+
+  useEffect(() => {
+    if (!strictExamMode || !isActive) {
+      return undefined;
+    }
+
+    const preventRestrictedAction = (event) => {
+      event.preventDefault();
+    };
+
+    const preventRestrictedShortcut = (event) => {
+      const key = event.key.toLowerCase();
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        ["c", "v", "x", "a"].includes(key)
+      ) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener(
+      "copy",
+      preventRestrictedAction
+    );
+    document.addEventListener(
+      "cut",
+      preventRestrictedAction
+    );
+    document.addEventListener(
+      "paste",
+      preventRestrictedAction
+    );
+    document.addEventListener(
+      "contextmenu",
+      preventRestrictedAction
+    );
+    document.addEventListener(
+      "keydown",
+      preventRestrictedShortcut
+    );
+
+    return () => {
+      document.removeEventListener(
+        "copy",
+        preventRestrictedAction
+      );
+      document.removeEventListener(
+        "cut",
+        preventRestrictedAction
+      );
+      document.removeEventListener(
+        "paste",
+        preventRestrictedAction
+      );
+      document.removeEventListener(
+        "contextmenu",
+        preventRestrictedAction
+      );
+      document.removeEventListener(
+        "keydown",
+        preventRestrictedShortcut
+      );
+    };
+  }, [strictExamMode, isActive]);
+
+  /* ========================================================
      TYPING INPUT
   ======================================================== */
 
@@ -829,6 +977,15 @@ const finishTest = useCallback(
     }
 
     setInput(value);
+
+    if (
+      currentPassage.text.length > 0 &&
+      value.length >= currentPassage.text.length
+    ) {
+      void finishTest({
+        finalInput: value,
+      });
+    }
   };
 
   /* ========================================================
@@ -1019,59 +1176,44 @@ const finishTest = useCallback(
 
   const handlePayment =
     async () => {
-      if (!user) {
-        setShowPaywall(
-          false
-        );
-
-        setAuthMode(
-          "login"
-        );
-
-        setShowAuthModal(
-          true
-        );
-
+      if (profile.is_premium) {
+        setShowPaywall(false);
         return;
       }
 
-      setPaymentLoading(
-        true
-      );
+      if (!user) {
+        setShowPaywall(false);
+        setAuthMode("login");
+        setShowAuthModal(true);
+        return;
+      }
+
+      setPaymentLoading(true);
 
       try {
         const {
-          data: {
-            session,
-          },
-        } =
-          await supabase.auth.getSession();
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-        if (!session) {
+        if (sessionError || !session) {
           throw new Error(
-            "Please log in again."
+            "Your login session has expired. Please sign in again."
           );
         }
 
-        /*
-          IMPORTANT:
-          Keep this exactly compatible with
-          your existing working API.
-        */
-        const res =
-          await fetch(
-            "/api/create-order",
-            {
-              method: "POST",
-              headers: {
-                Authorization:
-                  `Bearer ${session.access_token}`,
-              },
-            }
-          );
+        const res = await fetch(
+          "/api/create-order",
+          {
+            method: "POST",
+            headers: {
+              Authorization:
+                `Bearer ${session.access_token}`,
+            },
+          }
+        );
 
-        const order =
-          await res.json();
+        const order = await res.json();
 
         if (!res.ok) {
           throw new Error(
@@ -1080,16 +1222,33 @@ const finishTest = useCallback(
           );
         }
 
+        if (
+          !order?.id ||
+          !order?.amount
+        ) {
+          throw new Error(
+            "The payment order response was incomplete."
+          );
+        }
+
+        if (
+          typeof window === "undefined" ||
+          !window.Razorpay
+        ) {
+          throw new Error(
+            "Razorpay Checkout is still loading. Please try again in a moment."
+          );
+        }
+
         const options = {
           key:
             process.env
               .NEXT_PUBLIC_RAZORPAY_KEY_ID,
 
-          amount:
-            order.amount,
+          amount: order.amount,
 
           currency:
-            "INR",
+            order.currency || "INR",
 
           name:
             "SarkariType Pro",
@@ -1104,34 +1263,69 @@ const finishTest = useCallback(
             async (
               response
             ) => {
-              const verifyRes =
-                await fetch(
-                  "/api/verify-payment",
-                  {
-                    method:
-                      "POST",
+              try {
+                const {
+                  data: {
+                    session:
+                      verificationSession,
+                  },
+                } =
+                  await supabase.auth.getSession();
 
-                    headers: {
-                      "Content-Type":
-                        "application/json",
+                if (
+                  !verificationSession
+                ) {
+                  throw new Error(
+                    "Your login session expired during payment. Please sign in again; you will not need to pay twice."
+                  );
+                }
 
-                      Authorization:
-                        `Bearer ${session.access_token}`,
-                    },
+                const verifyRes =
+                  await fetch(
+                    "/api/verify-payment",
+                    {
+                      method:
+                        "POST",
 
-                    body:
-                      JSON.stringify(
-                        response
-                      ),
-                  }
+                      headers: {
+                        "Content-Type":
+                          "application/json",
+
+                        Authorization:
+                          `Bearer ${verificationSession.access_token}`,
+                      },
+
+                      body:
+                        JSON.stringify(
+                          response
+                        ),
+                    }
+                  );
+
+                const result =
+                  await verifyRes.json();
+
+                if (
+                  !verifyRes.ok ||
+                  !result.success ||
+                  result.premium !== true
+                ) {
+                  throw new Error(
+                    result.error ||
+                      "Payment was received, but Premium activation could not be confirmed."
+                  );
+                }
+
+                setProfile(
+                  (previous) => ({
+                    ...previous,
+                    ...(result.profile ||
+                      {}),
+                    is_premium:
+                      true,
+                  })
                 );
 
-              const result =
-                await verifyRes.json();
-
-              if (
-                result.success
-              ) {
                 setShowPaywall(
                   false
                 );
@@ -1143,35 +1337,88 @@ const finishTest = useCallback(
                 alert(
                   "Payment Successful! Lifetime Premium access granted."
                 );
-              } else {
+              } catch (
+                verificationError
+              ) {
+                console.error(
+                  "PAYMENT VERIFICATION UI ERROR:",
+                  verificationError
+                );
+
                 alert(
-                  "Payment verification failed. Please contact support."
+                  verificationError?.message ||
+                    "Payment verification failed. Please do not pay again; contact support with your Razorpay payment ID."
+                );
+              } finally {
+                setPaymentLoading(
+                  false
                 );
               }
             },
 
           prefill: {
             email:
-              user?.email,
+              user?.email || "",
           },
 
           theme: {
             color:
               "#2563EB",
           },
+
+          modal: {
+            ondismiss: () => {
+              setPaymentLoading(
+                false
+              );
+            },
+          },
         };
 
-        new window.Razorpay(
-          options
-        ).open();
+        const razorpayInstance =
+          new window.Razorpay(
+            options
+          );
+
+        razorpayInstance.on(
+          "payment.failed",
+          (response) => {
+            const message =
+              response?.error
+                ?.description ||
+              response?.error
+                ?.reason ||
+              "Payment failed.";
+
+            console.error(
+              "RAZORPAY PAYMENT FAILED:",
+              response?.error
+            );
+
+            setPaymentLoading(
+              false
+            );
+
+            alert(
+              `Payment failed: ${message}`
+            );
+          }
+        );
+
+        razorpayInstance.open();
       } catch (error) {
+        console.error(
+          "PAYMENT START ERROR:",
+          error
+        );
+
+        setPaymentLoading(
+          false
+        );
+
         alert(
           error?.message ||
             "Payment could not be started."
-        );
-      } finally {
-        setPaymentLoading(
-          false
         );
       }
     };
@@ -1182,17 +1429,31 @@ const finishTest = useCallback(
 
   const fetchLeaderboard =
     async () => {
-      setShowLeaderboard(
-        true
-      );
+      setShowLeaderboard(true);
 
       const {
         data,
+        error,
       } =
         await supabase
           .from("leaderboard")
           .select("*")
+          .order(
+            "total_xp",
+            {
+              ascending: false,
+            }
+          )
           .limit(10);
+
+      if (error) {
+        console.error(
+          "LEADERBOARD LOAD ERROR:",
+          error
+        );
+        setLeaderboard([]);
+        return;
+      }
 
       setLeaderboard(
         data || []
@@ -1319,7 +1580,7 @@ const finishTest = useCallback(
                     !strictExamMode
                   )
                 }
-                disabled={isActive}
+                disabled={isActive || countdown > 0}
                 title="Exam simulation mode"
                 className={`hidden items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition sm:flex ${
                   strictExamMode
@@ -1564,7 +1825,7 @@ const finishTest = useCallback(
                   !strictExamMode
                 )
               }
-              disabled={isActive}
+              disabled={isActive || countdown > 0}
               className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-black ${
                 strictExamMode
                   ? "border-red-500 bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
@@ -1631,7 +1892,7 @@ const finishTest = useCallback(
                 strictExamMode &&
                 isActive
                   ? "—"
-                  : liveStats.nwpm
+                  : liveStats.netWpm
               }
             />
 
@@ -1642,10 +1903,10 @@ const finishTest = useCallback(
                 strictExamMode &&
                 isActive
                   ? "—"
-                  : `${liveStats.acc}%`
+                  : `${liveStats.accuracy}%`
               }
               success={
-                liveStats.acc >=
+                liveStats.accuracy >=
                 90
               }
             />
@@ -1657,7 +1918,7 @@ const finishTest = useCallback(
                 strictExamMode &&
                 isActive
                   ? "—"
-                  : liveStats.gwpm
+                  : liveStats.grossWpm
               }
             />
           </section>
@@ -1777,9 +2038,6 @@ const finishTest = useCallback(
                   <button
                     onClick={
                       resetTest
-                    }
-                    disabled={
-                      isActive
                     }
                     title="Reset test"
                     className="rounded-xl border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800"
