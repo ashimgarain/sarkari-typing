@@ -1,19 +1,14 @@
 @import "tailwindcss";
-
-/*
-  Tailwind v4:
-  Make dark: respond to our .dark class instead of
-  automatically following Windows/browser preference.
-*/
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffafc;
+  --foreground: #1e293b;
 }
 
 html {
   color-scheme: light;
+  scroll-behavior: smooth;
 }
 
 html.dark {
@@ -27,14 +22,190 @@ html.dark {
   --font-mono: var(--font-geist-mono);
 }
 
-/*
-  Do NOT use prefers-color-scheme here.
-  The application itself controls the theme.
-*/
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a,
+select,
+input,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(139 92 246 / 0.35);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(196 181 253 / 0.55);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.45);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ============================================================
+   SarkariType Pro V5 Appearance System
+   ============================================================ */
+:root,
+html[data-palette="pastel"] {
+  --st-bg-1: #fffafc;
+  --st-bg-2: #f4fbff;
+  --st-bg-3: #faf7ff;
+  --st-surface: rgb(255 255 255 / 0.84);
+  --st-border: rgb(255 255 255 / 0.72);
+  --st-accent: #8b5cf6;
+  --st-accent-2: #38bdf8;
+  --st-accent-3: #f472b6;
+}
+
+html[data-palette="classic"] {
+  --st-bg-1: #f8fafc;
+  --st-bg-2: #ffffff;
+  --st-bg-3: #eff6ff;
+  --st-surface: rgb(255 255 255 / 0.9);
+  --st-border: rgb(203 213 225 / 0.75);
+  --st-accent: #2563eb;
+  --st-accent-2: #0ea5e9;
+  --st-accent-3: #475569;
+}
+
+html[data-palette="neo"] {
+  --st-bg-1: #f2fdff;
+  --st-bg-2: #f8fff0;
+  --st-bg-3: #faf4ff;
+  --st-surface: rgb(255 255 255 / 0.82);
+  --st-border: rgb(34 211 238 / 0.25);
+  --st-accent: #06b6d4;
+  --st-accent-2: #84cc16;
+  --st-accent-3: #a855f7;
+}
+
+html[data-palette="aurora"] {
+  --st-bg-1: #edfaff;
+  --st-bg-2: #effcf7;
+  --st-bg-3: #f1f3ff;
+  --st-surface: rgb(248 250 252 / 0.86);
+  --st-border: rgb(56 189 248 / 0.22);
+  --st-accent: #0284c7;
+  --st-accent-2: #10b981;
+  --st-accent-3: #6366f1;
+}
+
+html[data-palette="retro"] {
+  --st-bg-1: #f5fff6;
+  --st-bg-2: #fffcec;
+  --st-bg-3: #effff5;
+  --st-surface: rgb(250 255 247 / 0.9);
+  --st-border: rgb(34 197 94 / 0.24);
+  --st-accent: #15803d;
+  --st-accent-2: #d97706;
+  --st-accent-3: #166534;
+}
+
+html[data-palette="paper"] {
+  --st-bg-1: #fff8eb;
+  --st-bg-2: #fffdf7;
+  --st-bg-3: #f8ecdc;
+  --st-surface: rgb(255 250 240 / 0.9);
+  --st-border: rgb(176 137 104 / 0.25);
+  --st-accent: #9a6b46;
+  --st-accent-2: #c08457;
+  --st-accent-3: #7c4f34;
+}
+
+html.dark {
+  --st-bg-1: #090d18;
+  --st-bg-2: #0b1120;
+  --st-bg-3: #101329;
+  --st-surface: rgb(15 23 42 / 0.8);
+  --st-border: rgb(51 65 85 / 0.7);
+}
+
+html.dark[data-palette="neo"] {
+  --st-bg-1: #020b10;
+  --st-bg-2: #07100d;
+  --st-bg-3: #10071b;
+  --st-surface: rgb(4 17 21 / 0.86);
+}
+html.dark[data-palette="aurora"] {
+  --st-bg-1: #061220;
+  --st-bg-2: #071b1a;
+  --st-bg-3: #11142d;
+}
+html.dark[data-palette="retro"] {
+  --st-bg-1: #021008;
+  --st-bg-2: #07140b;
+  --st-bg-3: #151006;
+  --st-surface: rgb(3 19 10 / 0.9);
+}
+html.dark[data-palette="paper"] {
+  --st-bg-1: #1b1510;
+  --st-bg-2: #211a13;
+  --st-bg-3: #16110d;
+  --st-surface: rgb(35 27 20 / 0.9);
+}
+
+.st-shell {
+  background:
+    radial-gradient(circle at 9% 2%, color-mix(in srgb, var(--st-accent) 13%, transparent), transparent 30%),
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--st-accent-2) 12%, transparent), transparent 27%),
+    linear-gradient(180deg, var(--st-bg-1), var(--st-bg-2) 52%, var(--st-bg-3));
+}
+
+.st-header {
+  border-color: var(--st-border);
+  background: var(--st-surface);
+}
+
+.st-hero {
+  background: linear-gradient(135deg, var(--st-accent), var(--st-accent-3) 48%, var(--st-accent-2));
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--st-accent) 18%, transparent);
+}
+
+.st-primary {
+  background: linear-gradient(90deg, var(--st-accent), var(--st-accent-2));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--st-accent) 22%, transparent);
+}
+
+html[data-palette="retro"] body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+html[data-palette="paper"] body {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
