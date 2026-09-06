@@ -1,7 +1,7 @@
 import { EXAM_PAGES, LEARN_ARTICLES } from "../lib/content.mjs";
 
 export default function sitemap() {
-  const base = "https://sarkari-typing.vercel.app";
+  const base = "https://typing.aglimitless.in";
   const staticPages = ["", "/learn"].map((path) => ({
     url: `${base}${path}`,
     changeFrequency: path ? "weekly" : "daily",
