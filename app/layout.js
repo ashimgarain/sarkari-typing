@@ -2,7 +2,7 @@ import "./globals.css";
 import PwaRegister from "../components/PwaRegister";
 
 export const metadata = {
-  metadataBase: new URL("https://sarkari-typing.vercel.app"),
+  metadataBase: new URL("https://typing.aglimitless.in"),
   title: {
     default: "aglimitless",
     template: "%s | aglimitless",
@@ -21,7 +21,7 @@ export const metadata = {
   openGraph: {
     title: "SarkariType Pro",
     description: "Train smarter for government typing exams and share your progress.",
-    url: "https://sarkari-typing.vercel.app/",
+    url: "https://typing.aglimitless.in/",
     siteName: "SarkariType Pro",
     type: "website",
   },
