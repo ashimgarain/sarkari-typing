@@ -5,6 +5,6 @@ export default function robots() {
       allow: "/",
       disallow: ["/admin", "/api/"],
     },
-    sitemap: "https://sarkari-typing.vercel.app/sitemap.xml",
+    sitemap: "https://typing.aglimitless.in/sitemap.xml",
   };
 }
