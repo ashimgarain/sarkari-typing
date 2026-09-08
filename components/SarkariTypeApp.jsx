@@ -82,7 +82,7 @@ export default function SarkariTypeApp() {
   const supabase = useMemo(() => getSupabaseBrowser(), []);
 
   const [theme, setTheme] = useState(() => {
-    if (typeof window === "undefined") return "dark";
+    if (typeof window === "undefined") return "light";
     return localStorage.getItem("sarkari_theme") === "light" ? "light" : "dark";
   });
   const [palette, setPalette] = useState(() => {
