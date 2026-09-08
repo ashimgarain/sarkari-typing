@@ -40,7 +40,7 @@ export default function RootLayout({ children }) {
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('sarkari_theme')||'dark';var p=localStorage.getItem('sarkari_palette')||'pastel';var l=localStorage.getItem('sarkari_layout')||'standard';var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.style.colorScheme=t;r.dataset.palette=p;r.dataset.layout=l;}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('sarkari_theme')||'light';var p=localStorage.getItem('sarkari_palette')||'pastel';var l=localStorage.getItem('sarkari_layout')||'standard';var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.style.colorScheme=t;r.dataset.palette=p;r.dataset.layout=l;}catch(e){}})();`,
           }}
         />
       </head>
