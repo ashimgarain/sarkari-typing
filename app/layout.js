@@ -1,5 +1,6 @@
 import "./globals.css";
 import PwaRegister from "../components/PwaRegister";
+import SiteMigrationNotice from "../components/SiteMigrationNotice";
 
 export const metadata = {
   metadataBase: new URL("https://typing.aglimitless.in"),
@@ -13,14 +14,22 @@ export const metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/sarkaritype-icon.svg", type: "image/svg+xml" },
-      { url: "/sarkaritype-192.png", sizes: "192x192", type: "image/png" },
+      {
+        url: "/sarkaritype-icon.svg",
+        type: "image/svg+xml",
+      },
+      {
+        url: "/sarkaritype-192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
     ],
     apple: "/sarkaritype-192.png",
   },
   openGraph: {
     title: "SarkariType Pro",
-    description: "Train smarter for government typing exams and share your progress.",
+    description:
+      "Train smarter for government typing exams and share your progress.",
     url: "https://typing.aglimitless.in/",
     siteName: "SarkariType Pro",
     type: "website",
@@ -29,8 +38,14 @@ export const metadata = {
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf8ff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b1120" },
+    {
+      media: "(prefers-color-scheme: light)",
+      color: "#faf8ff",
+    },
+    {
+      media: "(prefers-color-scheme: dark)",
+      color: "#0b1120",
+    },
   ],
 };
 
@@ -40,11 +55,13 @@ export default function RootLayout({ children }) {
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('sarkari_theme')||'light';var p=localStorage.getItem('sarkari_palette')||'pastel';var l=localStorage.getItem('sarkari_layout')||'standard';var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.style.colorScheme=t;r.dataset.palette=p;r.dataset.layout=l;}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('sarkari_theme');var t=s==='dark'?'dark':'light';var p=localStorage.getItem('sarkari_palette')||'pastel';var l=localStorage.getItem('sarkari_layout')||'standard';var r=document.documentElement;r.classList.toggle('dark',t==='dark');r.style.colorScheme=t;r.dataset.palette=p;r.dataset.layout=l;}catch(e){}})();`,
           }}
         />
       </head>
+
       <body>
+        <SiteMigrationNotice />
         <PwaRegister />
         {children}
       </body>
