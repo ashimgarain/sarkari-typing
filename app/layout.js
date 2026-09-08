@@ -2,16 +2,33 @@ import "./globals.css";
 import PwaRegister from "../components/PwaRegister";
 import SiteMigrationNotice from "../components/SiteMigrationNotice";
 
+const SITE_URL = "https://typing.aglimitless.in";
+const SOCIAL_PREVIEW_IMAGE =
+  `${SITE_URL}/sarkaritype-social-preview.png`;
+
+const SOCIAL_TITLE =
+  "SarkariType Pro | Government Exam Typing Practice";
+
+const SOCIAL_DESCRIPTION =
+  "Practice SSC, Railway, Banking and government-exam typing with exam simulation, 140+ passages, saved progress, XP and detailed accuracy analysis.";
+
 export const metadata = {
-  metadataBase: new URL("https://typing.aglimitless.in"),
+  metadataBase: new URL(SITE_URL),
+
   title: {
-    default: "aglimitless",
-    template: "%s | aglimitless",
+    default: SOCIAL_TITLE,
+    template: "%s | SarkariType Pro",
   },
-  description:
-    "SarkariType Pro is a government-exam typing practice platform with exam simulation, saved progress, XP, streaks, challenges and detailed accuracy analysis.",
+
+  description: SOCIAL_DESCRIPTION,
   applicationName: "SarkariType Pro",
+
+  alternates: {
+    canonical: "/",
+  },
+
   manifest: "/manifest.webmanifest",
+
   icons: {
     icon: [
       {
@@ -26,13 +43,30 @@ export const metadata = {
     ],
     apple: "/sarkaritype-192.png",
   },
+
   openGraph: {
-    title: "SarkariType Pro",
-    description:
-      "Train smarter for government typing exams and share your progress.",
-    url: "https://typing.aglimitless.in/",
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    url: SITE_URL,
     siteName: "SarkariType Pro",
+    locale: "en_IN",
     type: "website",
+
+    images: [
+      {
+        url: SOCIAL_PREVIEW_IMAGE,
+        width: 1200,
+        height: 630,
+        alt: "SarkariType Pro government exam typing practice platform",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: SOCIAL_TITLE,
+    description: SOCIAL_DESCRIPTION,
+    images: [SOCIAL_PREVIEW_IMAGE],
   },
 };
 
